@@ -1,0 +1,15 @@
+Evaluating model 'panda__full__lp191_5.25m'
+
+----------------------------------------
+> Results for PANDA__FULL__LP191_5.25M
+
+  solutions clamped to joint limits: True
+  non-self-colliding testset:        True
+  solutions refined:                 False
+
+  Average positional error:              6.8466 mm
+  Average rotational error:         2.3369 deg
+  Percent joint limits exceeded: 0.0 %
+  Percent self-colliding:        1.672 %
+  Average runtime:               171.0344 +/- 0.0162 ms for 100 solutions
+                                 1.7103 ms per solution

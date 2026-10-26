@@ -1,0 +1,7 @@
+{
+  "benchmark": "fr3_6d",
+  "n_poses": 20,
+  "same_loop_count": true,
+  "max_rel_mass_change": 1.2996333409252326e-06,
+  "median_rel_mass_change": 1.3863552943226975e-09
+}

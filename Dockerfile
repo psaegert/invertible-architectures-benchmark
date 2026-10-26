@@ -38,6 +38,7 @@ COPY data ./data
 COPY models ./models
 COPY experiments ./experiments
 COPY metrics ./metrics
+COPY robot_ik ./robot_ik
 COPY tests ./tests
 COPY pytest.ini requirements.txt requirements-docker.in README.md ./
 

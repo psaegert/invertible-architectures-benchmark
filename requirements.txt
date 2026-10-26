@@ -7,3 +7,5 @@ pytest>=8
 FrEIA @ git+https://github.com/vislearn/FrEIA.git@421249652c478b3f240f124f69eb5777b6a76bf2
 # BayesFlow: NPSE (experiments/bayesflow_npse.py) and the FMPE cross-check (experiments/bayesflow_fmpe.py); Keras 3 on the torch backend.
 bayesflow>=2.0.14
+# FR3 kinematics for the robot_ik benchmark (docs/robot_ik.md).
+pytorch-kinematics==0.10.0

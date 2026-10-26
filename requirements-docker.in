@@ -12,3 +12,4 @@ pytest==9.1.1
 bayesflow==2.0.14
 keras==3.15.1
 FrEIA @ git+https://github.com/vislearn/FrEIA.git@421249652c478b3f240f124f69eb5777b6a76bf2
+pytorch-kinematics==0.10.0

@@ -60,20 +60,22 @@ def make_test_conditions(benchmark, n=N_CONDITIONS, seed=TEST_SEED):
     return np.concatenate(ys)[:n], np.concatenate(xs)[:n]
 
 
-def conditions_path(benchmark):
-    return CONDITIONS_DIR / f'{benchmark}.npz'
+def conditions_path(benchmark, split='test'):
+    """split 'test' is <benchmark>.npz; other splits (e.g. 'val' for model
+    selection on the FR3 tasks) are <benchmark>_<split>.npz."""
+    return CONDITIONS_DIR / (f'{benchmark}.npz' if split == 'test' else f'{benchmark}_{split}.npz')
 
 
-def save_test_conditions(benchmark):
-    y_star, x_true = make_test_conditions(benchmark)
+def save_test_conditions(benchmark, split='test', n=N_CONDITIONS, seed=TEST_SEED):
+    y_star, x_true = make_test_conditions(benchmark, n, seed)
     CONDITIONS_DIR.mkdir(exist_ok=True)
-    np.savez(conditions_path(benchmark), y_star=y_star, x_true=x_true, seed=TEST_SEED)
+    np.savez(conditions_path(benchmark, split), y_star=y_star, x_true=x_true, seed=seed)
     return y_star, x_true
 
 
-def load_test_conditions(benchmark):
+def load_test_conditions(benchmark, split='test'):
     """The committed, shared set of test conditions: (y_star, x_true)."""
-    with np.load(conditions_path(benchmark)) as f:
+    with np.load(conditions_path(benchmark, split)) as f:
         return f['y_star'], f['x_true']
 
 

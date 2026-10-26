@@ -45,7 +45,7 @@ from pathlib import Path
 import numpy as np
 from scipy.spatial import cKDTree
 
-from data.toy_data import PRIOR_PARAMS, prior_tag
+from data.toy_data import MODELS, PRIOR_PARAMS, prior_tag
 from metrics.benchmarks import forward_fn, load_test_conditions, prior
 
 N_GT = 1000
@@ -121,10 +121,15 @@ def ground_truth_posterior(benchmark, y_star=None, n_gt=N_GT, sigma=None, seed=G
 
     The cache key covers y*, n_gt, sigma, seed, max_proposals and prior_params, so
     changing any of them recomputes instead of silently reusing stale samples."""
-    if prior_params is not None and np.array_equal(np.ravel(prior_params), PRIOR_PARAMS[benchmark]['default']):
-        prior_params = None  # same draws as the benchmark prior (tests/test_conditional_fmpe.py)
     if y_star is None:
         y_star, _ = load_test_conditions(benchmark)
+    problem = MODELS[benchmark]()
+    if hasattr(problem, 'ground_truth'):  # FR3: exact posterior from robot_ik, not rejection sampling
+        if prior_params is not None:
+            raise ValueError(f'{benchmark} has no prior parameters')
+        return problem.ground_truth(y_star, n_gt=n_gt, seed=seed, verbose=verbose)
+    if prior_params is not None and np.array_equal(np.ravel(prior_params), PRIOR_PARAMS[benchmark]['default']):
+        prior_params = None  # same draws as the benchmark prior (tests/test_conditional_fmpe.py)
     sigma = GT_SIGMA[benchmark] if sigma is None else sigma
     max_proposals = GT_MAX_PROPOSALS[benchmark] if max_proposals is None else max_proposals
     path = _cache_path(benchmark, y_star, n_gt, sigma, seed, max_proposals, prior_params)

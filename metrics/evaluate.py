@@ -2,11 +2,16 @@
 
 A model only has to provide
 
-    sample(y_star, n) -> x,   y_star: (M, dim_y) float32 array,  x: (M, n, 4)
+    sample(y_star, n) -> x,   y_star: (M, dim_y) float32 array,  x: (M, n, dim_x)
 
-(numpy array or torch tensor, raw x units). Run e.g.
+(numpy array or torch tensor, raw x units; dim_x = 4 for the toy benchmarks,
+7 for the FR3 tasks). Run e.g.
 
     python -m metrics.evaluate kinematics --prior-baseline
+
+Problems that define `task_metrics` (the FR3 tasks, robot_ik/metrics.py) add
+their own numbers to the summary and the per-y* arrays: pose errors, joint
+limit violations and coverage.
 
 Reported numbers:
   Err_post   unbiased MMD^2 estimate (metrics/mmd.py) between n model samples and
@@ -36,7 +41,7 @@ from pathlib import Path
 import numpy as np
 
 from data.toy_data import PRIOR_PARAMS
-from metrics.benchmarks import forward_fn, load_test_conditions, prior
+from metrics.benchmarks import BENCHMARKS, forward_fn, get_model, load_test_conditions, prior
 from metrics.ground_truth import ground_truth_posterior
 from metrics.mmd import mmd
 
@@ -117,16 +122,19 @@ def summarize(values):
 
 
 def evaluate(sample_fn, benchmark, name, n_samples=N_SAMPLES, out_dir=RESULTS_DIR, verbose=True,
-             n_conditions=None, gt_options=None, prior_params=None):
+             n_conditions=None, gt_options=None, prior_params=None, split='test'):
     """Score one model on the shared test conditions; saves the per-y* arrays to
     <out_dir>/<benchmark>_<name>.npz and the summary to .json next to it.
     prior_params (data.toy_data.PRIOR_PARAMS): score against the ground truth under
     that prior instead of the benchmark prior; sample_fn must then sample
-    p(x | y*, prior_params)."""
-    y_star, _ = load_test_conditions(benchmark)
+    p(x | y*, prior_params).
+    split: 'test' (default) or 'val' where a validation set exists (the FR3 tasks);
+    select models on 'val', report on 'test'."""
+    problem = get_model(benchmark)
+    y_star, _ = load_test_conditions(benchmark) if split == 'test' else load_test_conditions(benchmark, split)
     if n_conditions is not None:
         if not 1 <= n_conditions <= len(y_star):
-            raise ValueError('n_conditions must be between 1 and 1000')
+            raise ValueError(f'n_conditions must be between 1 and {len(y_star)}')
         y_star = y_star[:n_conditions]
     if n_samples < 2:
         raise ValueError('MMD evaluation requires at least two samples')
@@ -136,13 +144,14 @@ def evaluate(sample_fn, benchmark, name, n_samples=N_SAMPLES, out_dir=RESULTS_DI
         raise ValueError('Ground truth has fewer than two samples for a condition; increase proposal cap')
 
     x, seconds = timed_sampling(sample_fn, y_star, n_samples)
-    assert x.shape == (len(y_star), n_samples, 4), f'sample() returned {x.shape}'
+    assert x.shape == (len(y_star), n_samples, problem.n_parameters), f'sample() returned {x.shape}'
     if not np.isfinite(x).all():
         raise ValueError('Model produced non-finite posterior samples')
 
     post, _ = err_post(x, gt)
     post_biased, _ = err_post(x, gt, unbiased=False)
     resim, _, failed = err_resim(x, y_star, forward_fn(benchmark))
+    task_summary, task_arrays = problem.task_metrics(x, y_star, gt) if hasattr(problem, 'task_metrics') else ({}, {})
 
     summary = {
         'benchmark': benchmark, 'model': name, 'n_conditions': len(y_star),
@@ -154,13 +163,15 @@ def evaluate(sample_fn, benchmark, name, n_samples=N_SAMPLES, out_dir=RESULTS_DI
         'clamp': CLAMP,
         'evaluation_scope': 'full' if n_conditions is None and n_samples == N_SAMPLES and not gt_options else 'pilot',
         'gt_options': gt_options,
+        **({'split': split} if split != 'test' else {}),
+        **task_summary,
     }
     if prior_params is not None:
         summary.update(zip(PRIOR_PARAMS[benchmark]['names'], map(float, np.ravel(prior_params))))
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     np.savez(out_dir / f'{benchmark}_{name}.npz', err_post=post, err_post_biased=post_biased, err_resim=resim,
-             resim_failed=failed, y_star=y_star)
+             resim_failed=failed, y_star=y_star, **task_arrays)
     (out_dir / f'{benchmark}_{name}.json').write_text(json.dumps(summary, indent=2))
     if verbose:
         print_row(summary)
@@ -181,6 +192,11 @@ def print_row(s):
           f"resim {r['median']:.4f} [{r['q1']:.4f}, {r['q3']:.4f}]")
     if s['resim_failed_fraction'] > 0:
         print(f"{'':<28} f(x) undefined for {100 * s['resim_failed_fraction']:.2f}% of samples")
+    if 'pos_err_mm' in s:
+        ang = 'rot_err_deg' if 'rot_err_deg' in s else 'axis_err_deg'
+        print(f"{'':<28} pose error median/p95: {s['pos_err_mm']['median']:.2f}/{s['pos_err_mm']['p95']:.2f} mm, "
+              f"{s[ang]['median']:.2f}/{s[ang]['p95']:.2f} deg; success@1mm,1deg {s['success_rate']['1mm_1deg']:.3f}; "
+              f"limits violated {s['joint_limit_violation_fraction']:.3f}; coverage {s['coverage']['mean']:.3f}")
 
 
 def prior_sampler(benchmark, seed=0):
@@ -188,7 +204,8 @@ def prior_sampler(benchmark, seed=0):
     must score clearly worse than any trained model, or the metrics are not
     conditioning on y*."""
     rng = np.random.RandomState(seed)
-    return lambda y, n: prior(benchmark, len(y) * n, rng).reshape(len(y), n, 4)
+    dim = get_model(benchmark).n_parameters
+    return lambda y, n: prior(benchmark, len(y) * n, rng).reshape(len(y), n, dim)
 
 
 def boxplot(result_files, out_path, metric='err_resim'):
@@ -212,7 +229,7 @@ def boxplot(result_files, out_path, metric='err_resim'):
 
 if __name__ == '__main__':
     p = argparse.ArgumentParser(description=__doc__.split('\n')[0])
-    p.add_argument('benchmark', choices=['kinematics', 'ballistics'])
+    p.add_argument('benchmark', choices=BENCHMARKS)
     p.add_argument('--prior-baseline', action='store_true', help='score the prior-only "model"')
     args = p.parse_args()
     if args.prior_baseline:

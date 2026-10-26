@@ -121,9 +121,13 @@ class InverseBallisticsModel:
         return np.concatenate(out)[:, None]
 
 
+from robot_ik.tasks import Fr3Axis5D, Fr3Pose6D  # noqa: E402  (7-joint Franka FR3, docs/robot_ik.md)
+
 MODELS = {
     'kinematics': InverseKinematicsModel,
     'ballistics': InverseBallisticsModel,
+    'fr3_6d': Fr3Pose6D,
+    'fr3_5d': Fr3Axis5D,
 }
 
 
